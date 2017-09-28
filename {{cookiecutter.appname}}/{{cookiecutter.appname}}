@@ -139,6 +139,7 @@ case "$ACTION" in
   ;;
 
 (requirements)
+  $ECHO ansible-galaxy install -r requirements.yml -p ansible/roles-external "$@"
   ;;
 
 (env)
