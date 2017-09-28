@@ -1,0 +1,10 @@
+[all:vars]
+; foo=bar
+
+[{{cookiecutter.rolename}}]
+; localhost ansible_connection=local ansible_python_interpreter=/usr/local/bin/python
+
+[foo:children]
+; {{cookiecutter.rolename}}
+
+[foo:vars]

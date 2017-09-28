@@ -1,0 +1,11 @@
+- name: foo
+  shell: echo foo
+  notify:
+    - do some stuff
+
+- name:
+  template:
+    src: templ.j2
+    dest: /tmp/file
+  vars: {}
+  when: false

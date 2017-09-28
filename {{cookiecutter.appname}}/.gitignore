@@ -1,0 +1,5 @@
+.vagrant/
+.cache/
+.DS_Store
+*openrc*
+config
