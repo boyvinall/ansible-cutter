@@ -1,0 +1,168 @@
+#!/bin/bash
+
+function usage {
+    cat <<EOF
+Usage: $0 [options] COMMAND [command options]
+
+Options:
+    -i <inventory_path>     Specify path to ansible inventory file
+    -h                      Show this usage information
+    -e <ansible variables>  Set additional variables as key=value or YAML/JSON passed to ansible-playbook
+    -v                      Increase verbosity of ansible-playbook
+    -p <playbook>           Run the specified playbook file instead of the default one
+    -c <configdir>          Use the specified config directory (can also be specified in the shell env as BOSI_CFG)
+    -n                      Dry run - make no changes
+    -E                      Echo the commands - don't actually run them
+
+Commands:
+    requirements            Install requirements
+    run                     Run ansible
+    env                     Prints the currently-configured environment (inventory/env var)
+    help
+EOF
+}
+
+function bash_completion {
+cat <<EOF
+-i
+-p
+-c
+-e
+-h
+-v
+requirements
+run
+env
+help
+EOF
+}
+
+function choose_config {
+  if [ -z "$configdir" ]; then
+    if [ ! -f .config ]; then
+      echo "Please specify config dir:"
+      configdirs=($(ls configs/*/inventory.txt | xargs -L1 dirname))
+      numdirs=$(echo "$configdirs" | wc -l)
+      select configdir in "${configdirs[@]}" "None of the above"; do
+        if [ "$REPLY" -eq "$(($numdirs+1))" ]; then
+          echo quit
+        elif [ "$REPLY" -le "$numdirs" ]; then
+          echo "configdir=$configdir" > .config
+        else
+          echo "Bad choice, try again"
+          continue
+        fi
+        break
+      done
+    else
+      source .config
+    fi
+  fi
+  if [ -f $configdir/env ]; then source $configdir/env; fi
+  inventory=$configdir/inventory.txt
+  extravars=$configdir/extra-vars.json
+  for f in $inventory; do
+    if [ ! -f "$f" ]; then
+      echo "ERROR: $f doesn't exist"
+      exit 2
+    fi
+  done
+  if [ -f "$extravars" ]; then
+    EXTRA_OPTS="$EXTRA_OPTS -e @$extravars"
+  fi
+}
+
+VERBOSITY=
+PLAYBOOK=ansible/site.yml
+ECHO=
+EXTRA_OPTS=
+
+SHORT_OPTS=":hi:e:p:c:v?nE"
+# The OSX getopt command doesn't support long options
+while getopts $SHORT_OPTS optchar; do
+case "${optchar}" in
+
+  c)
+    configdir=$OPTARG
+    ;;
+
+  i)
+    INVENTORY="$OPTARG"
+    ;;
+
+  e)
+    EXTRA_OPTS="$EXTRA_OPTS -e $OPTARG"
+    ;;
+
+  h)
+    usage
+    exit 0
+    ;;
+
+  p)
+    PLAYBOOK=$OPTARG
+    ;;
+
+  v)
+    VERBOSITY="$VERBOSITY --verbose"
+    set -x
+    ;;
+
+  n)
+    EXTRA_OPTS="$EXTRA_OPTS --check"
+    ;;
+
+  E)
+    ECHO=echo
+    ;;
+
+  *)
+    echo "error"
+    exit 3
+    ;;
+esac
+done
+
+shift $((OPTIND-1))
+choose_config
+
+ACTION=$1
+shift
+case "$ACTION" in
+
+(clean)
+  $ECHO rm -f .config
+  ;;
+
+(run)
+  $ECHO ansible-playbook -i $inventory $EXTRA_OPTS $VERBOSITY "$@" $PLAYBOOK
+  ;;
+
+(requirements)
+  ;;
+
+(env)
+  echo -e "$inventory\n--"
+  env | grep OS_
+  ;;
+
+(bash-completion)
+  bash_completion
+  exit 0
+  ;;
+
+(help)
+  usage
+  ;;
+
+(*)
+  if [ -z "$ACTION" ]; then
+    echo -e "ERROR: No command specified\n"
+  else
+    echo -e "ERROR: '$ACTION' is invalid command\n"
+  fi
+  usage
+  exit 2
+  ;;
+
+esac
