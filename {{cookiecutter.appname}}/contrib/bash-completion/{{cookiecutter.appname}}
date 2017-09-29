@@ -1,13 +1,22 @@
-_{{cookiecutter.appname}}() {
+{% set appname_sym = cookiecutter.appname|replace('-','_') -%}
+{% set opts     = appname_sym ~ '_opt'                     -%}
+{% set flags    = appname_sym ~ '_flags'                   -%}
+{% set actions  = appname_sym ~ '_actions'                 -%}
+
+{% set opts_val    = '${' ~ opts ~ '}'                     -%}
+{% set flags_val   = '${' ~ flags ~ '}'                    -%}
+{% set actions_val = '${' ~ actions ~ '}'                  -%}
+
+_{{appname_sym}}() {
     local cur prev opts
 
     COMPREPLY=()
 
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    {{cookiecutter.appname}}_opts="$({{cookiecutter.appname}} bash-completion)"
-    {{cookiecutter.appname}}_flags="$(echo {{'${'}}{{cookiecutter.appname}}_opts} | sed 's/ [^-][a-z0-9_-]*//g' )"
-    {{cookiecutter.appname}}_actions="$(echo {{'${'}}{{cookiecutter.appname}}_opts} | sed 's/--[a-z0-9-]*//g' | sed 's/\(^\| \)-[a-z]//g' )"
+    {{opts}}="$({{cookiecutter.appname}} bash-completion)"
+    {{flags}}="$(echo {{opts_val}} | sed 's/ [^-][a-z0-9_-]*//g' )"
+    {{actions}}="$(echo {{opts_val}} | sed 's/--[a-z0-9-]*//g' | sed 's/\(^\| \)-[a-z]//g' )"
 
     case "${prev}" in
     -p|-i|-c)
@@ -23,12 +32,12 @@ _{{cookiecutter.appname}}() {
     esac
 
     if [[ ${cur} == -* ]] ; then
-        COMPREPLY=( $(compgen -W "{{'${'}}{{cookiecutter.appname}}_flags}" -- ${cur}) )
+        COMPREPLY=( $(compgen -W "{{flags_val}}" -- ${cur}) )
         return 0
     else
-        COMPREPLY=( $(compgen -W "{{'${'}}{{cookiecutter.appname}}_actions}" -- ${cur}) )
+        COMPREPLY=( $(compgen -W "{{actions_val}}" -- ${cur}) )
         return 0
     fi
 }
 
-complete -F _{{cookiecutter.appname}} {{cookiecutter.appname}}
+complete -F _{{appname_sym}} {{cookiecutter.appname}}
