@@ -60,16 +60,17 @@ function choose_config {
   fi
   if [ -f $configdir/env ]; then source $configdir/env; fi
   inventory=$configdir/inventory.txt
-  extravars=$configdir/extra-vars.json
   for f in $inventory; do
     if [ ! -f "$f" ]; then
       echo "ERROR: $f doesn't exist"
       exit 2
     fi
   done
-  if [ -f "$extravars" ]; then
-    EXTRA_OPTS="$EXTRA_OPTS -e @$extravars"
-  fi
+  for f in $configdir/extra-vars.{json,yml}; do
+    if [ -f "$f" ]; then
+      EXTRA_OPTS="$EXTRA_OPTS -e @$f"
+    fi
+  done
 }
 
 VERBOSITY=
