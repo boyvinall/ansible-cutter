@@ -1,1 +1,3 @@
-- include: {{cookiecutter.rolename}}.yml
+- hosts: all
+  roles:
+    - role: {{cookiecutter.rolename}}

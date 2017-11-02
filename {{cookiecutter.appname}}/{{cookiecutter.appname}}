@@ -5,6 +5,7 @@ function usage {
 Usage: $0 [options] COMMAND [command options]
 
 Options:
+
     -i <inventory_path>     Specify path to ansible inventory file
     -h                      Show this usage information
     -e <ansible variables>  Set additional variables as key=value or YAML/JSON passed to ansible-playbook
@@ -15,9 +16,18 @@ Options:
     -E                      Echo the commands - don't actually run them
 
 Commands:
+
     requirements            Install requirements
-    run                     Run ansible
+
+    config                  Run ansible
+
     env                     Prints the currently-configured environment (inventory/env var)
+    ping                    Does an ansible ping (not ICMP) to all hosts
+    exec                    Execute arbitrary command on a specified ansible host group
+    ssh                     SSH to host using ansible inventory credentials/connection (requires ansible 2.4 or greater)
+    list                    List hosts in inventory (requires ansible 2.4 or greater)
+    rescan                  Scan SSH host keys into $HOME/.ssh/known_hosts
+
     help
 EOF
 }
@@ -31,7 +41,12 @@ cat <<EOF
 -h
 -v
 requirements
-run
+config
+ssh
+ping
+exec
+rescan
+list
 env
 help
 EOF
@@ -60,17 +75,30 @@ function choose_config {
   fi
   if [ -f $configdir/env ]; then source $configdir/env; fi
   inventory=$configdir/inventory.txt
-  for f in $inventory; do
-    if [ ! -f "$f" ]; then
-      echo "ERROR: $f doesn't exist"
-      exit 2
-    fi
-  done
-  for f in $configdir/extra-vars.{json,yml}; do
+  if [ ! -f "$inventory" ]; then
+    echo "ERROR: $f doesn't exist"
+    exit 2
+  fi
+  for f in $configdir/*.json $configdir/*.yml; do
     if [ -f "$f" ]; then
       EXTRA_OPTS="$EXTRA_OPTS -e @$f"
     fi
   done
+}
+
+function _ansible_config {
+  _config=$(ansible-inventory -i $inventory --host $1 | jq -Mr $2 2>/dev/null)
+  if [ $_config != "null" ];  then
+    echo $_config
+  fi
+}
+
+function _ssh {
+  local ssh_args=$(_ansible_config $1 .ansible_ssh_common_args)
+  local ssh_user=$(_ansible_config $1 .ansible_user)
+  local ssh_host=$(_ansible_config $1 .ansible_host)
+  shift
+  ssh $ssh_args $ssh_user@$ssh_host "$@"
 }
 
 VERBOSITY=
@@ -126,6 +154,7 @@ done
 
 shift $((OPTIND-1))
 choose_config
+export CONFIG_PATH=$(realpath $configdir)
 
 ACTION=$1
 shift
@@ -135,12 +164,40 @@ case "$ACTION" in
   $ECHO rm -f .config
   ;;
 
-(run)
-  $ECHO ansible-playbook -i $inventory $EXTRA_OPTS $VERBOSITY "$@" $PLAYBOOK
+(config)
+  $ECHO ansible-playbook -i $inventory $EXTRA_OPTS $VERBOSITY -e _action=$ACTION "$@" $PLAYBOOK
   ;;
 
 (requirements)
   $ECHO ansible-galaxy install -r requirements.yml -p ansible/roles-external "$@"
+  ;;
+
+(ping)
+  $ECHO ansible-playbook -i $inventory $EXTRA_OPTS -e bosi_action=$ACTION $VERBOSITY "$@" ansible/ping.yml
+  ;;
+
+(exec)
+  ANSIBLE_GROUP=$1
+  shift
+  $ECHO ansible -i $inventory $ANSIBLE_GROUP -m shell -a "$@"
+  ;;
+
+(ssh)
+  _ssh "$@"
+  ;;
+
+(list)
+  ansible-inventory -i $inventory --list | jq -Mr '[._meta.hostvars | to_entries[] | {key: .key, value: .value.ansible_host}] | from_entries'
+  ;;
+
+(rescan)
+  HOSTS=$(ansible-inventory -i $inventory --list | jq -Mr '._meta.hostvars | .[] | select(has("ansible_host")) | .ansible_host')
+  for h in $HOSTS; do
+    ssh-keygen -R $h
+    a=$(dig +short $h)
+    if [ -n "$a" ]; then ssh-keygen -R $a; fi
+    ssh-keyscan -t rsa $h >> $HOME/.ssh/known_hosts
+  done
   ;;
 
 (env)

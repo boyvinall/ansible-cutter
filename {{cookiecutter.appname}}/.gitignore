@@ -1,5 +1,6 @@
-.vagrant/
-.cache/
-.DS_Store
+.*
+!.editorconfig
+!.gitignore
+!.vscode
 *openrc*
 config
